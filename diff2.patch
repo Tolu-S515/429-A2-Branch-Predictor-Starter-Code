@@ -1,34 +1,26 @@
-diff --git a/.gem5-resources/riscv-spec-lbm-bin b/.gem5-resources/riscv-spec-lbm-bin
-new file mode 100755
-index 0000000..e78caa9
-Binary files /dev/null and b/.gem5-resources/riscv-spec-lbm-bin differ
-diff --git a/.gem5-resources/riscv-spec-mcf-bin b/.gem5-resources/riscv-spec-mcf-bin
-new file mode 100755
-index 0000000..1efd399
-Binary files /dev/null and b/.gem5-resources/riscv-spec-mcf-bin differ
 diff --git a/src/cpu/o3/iew.cc b/src/cpu/o3/iew.cc
-index 21b488a..af089b8 100644
+index 21b488a..2497ed5 100644
 --- a/src/cpu/o3/iew.cc
 +++ b/src/cpu/o3/iew.cc
 @@ -143,6 +143,22 @@ IEW::regProbePoints()
  
  IEW::IEWStats::IEWStats(CPU *cpu)
      : statistics::Group(cpu, "iew"),
-+    ADD_STAT(forwards_taken, statistics::units::Count::get(),
++    ADD_STAT(total_forwards_taken, statistics::units::Count::get(),
 +             "number of forward branches taken"),
-+    ADD_STAT(forwards_not_taken, statistics::units::Count::get(),
++    ADD_STAT(total_forwards_not_taken, statistics::units::Count::get(),
 +             "number of forward branches not taken"),
 +    ADD_STAT(total_backwards_taken, statistics::units::Count::get(),
 +             "number of backward branches taken"),
 +    ADD_STAT(total_backwards_not_taken, statistics::units::Count::get(),
 +             "total number of backward branches not taken"),
-+    ADD_STAT(mispredicted_forward_taken, statistics::units::Count::get(),
++    ADD_STAT(mispredicted_forwards_taken, statistics::units::Count::get(),
 +             "number of mispredicted forwards taken"),
-+    ADD_STAT(mispredicted_forward_not_taken, statistics::units::Count::get(),
++    ADD_STAT(mispredicted_forwards_not_taken, statistics::units::Count::get(),
 +             "number of mispredicted forwards not taken"),
-+    ADD_STAT(mispredicted_backward_taken, statistics::units::Count::get(),
++    ADD_STAT(mispredicted_backwards_taken, statistics::units::Count::get(),
 +             "number of mispredicted backwards taken"),
-+    ADD_STAT(mispredicted_backward_not_taken, statistics::units::Count::get(),
++    ADD_STAT(mispredicted_backwards_not_taken, statistics::units::Count::get(),
 +             "number of mispredicted backwards not taken"),
      ADD_STAT(idleCycles, statistics::units::Cycle::get(),
               "Number of cycles IEW is idle"),
@@ -46,42 +38,42 @@ index 21b488a..af089b8 100644
      if (inst->isControl()) {
          cpu->executeStats[tid]->numBranches++;
 +
-+		Addr target_address = inst->branchTarget(tc);
-+        Addr inst_address = inst -> pcState();
++        Addr inst_address = inst->pcState().instAddr();
++		Addr target_address = inst->branchTarget()->instAddr();
 +
 +        if (inst->mispredicted()){
 +            if (inst->readPredTaken()) {
 +                if (target_address > inst_address) {
-+                    mispredicted_forwards_taken++;
++                    iewStats.mispredicted_forwards_taken++;
 +                }
 +                else {
-+                    mispredicted_backwards_taken++;
++                    iewStats.mispredicted_backwards_taken++;
 +                }
 +            }
 +            else {
 +                if (target_address > inst_address) {
-+                    mispredicted_forwards_not_taken++;
++                    iewStats.mispredicted_forwards_not_taken++;
 +                }
 +                else {
-+                    mispredicted_backwards_not_taken++;
++                    iewStats.mispredicted_backwards_not_taken++;
 +                }
 +            }
 +        }
 +        else {
 +            if (inst->readPredTaken()) {
 +                if (target_address > inst_address) {
-+                    total_forwards_taken++;
++                    iewStats.total_forwards_taken++;
 +                }
 +                else {
-+                    total_backwards_taken++;
++                    iewStats.total_backwards_taken++;
 +                }
 +            }
 +            else {
 +                if (target_address > inst_address) {
-+                    total_forwards_not_taken++;
++                    iewStats.total_forwards_not_taken++;
 +                }
 +                else {
-+                    total_backwards_not_taken++;
++                    iewStats.total_backwards_not_taken++;
 +                }
 +            }
 +        }
@@ -90,21 +82,21 @@ index 21b488a..af089b8 100644
  
      //
 diff --git a/src/cpu/o3/iew.hh b/src/cpu/o3/iew.hh
-index 1307e0c..e9f5aeb 100644
+index 1307e0c..8dcc76a 100644
 --- a/src/cpu/o3/iew.hh
 +++ b/src/cpu/o3/iew.hh
 @@ -422,6 +422,15 @@ class IEW
      {
          IEWStats(CPU *cpu);
  
-+        statistics::Scalar forwards_taken;
-+        statistics::Scalar forwards_not_taken;
++        statistics::Scalar total_forwards_taken;
++        statistics::Scalar total_forwards_not_taken;
 +        statistics::Scalar total_backwards_taken;
 +        statistics::Scalar total_backwards_not_taken;
-+        statistics::Scalar mispredicted_forward_taken;
-+        statistics::Scalar mispredicted_forward_not_taken;
-+        statistics::Scalar mispredicted_backward_taken;
-+        statistics::Scalar mispredicted_backward_not_taken;
++        statistics::Scalar mispredicted_forwards_taken;
++        statistics::Scalar mispredicted_forwards_not_taken;
++        statistics::Scalar mispredicted_backwards_taken;
++        statistics::Scalar mispredicted_backwards_not_taken;
 +
          /** Stat for total number of idle cycles. */
          statistics::Scalar idleCycles;
