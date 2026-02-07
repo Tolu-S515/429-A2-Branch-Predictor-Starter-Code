@@ -1,12 +1,5 @@
-diff --git a/.gem5-resources/riscv-spec-mcf-bin b/.gem5-resources/riscv-spec-mcf-bin
-new file mode 100755
-index 0000000..1efd399
-Binary files /dev/null and b/.gem5-resources/riscv-spec-mcf-bin differ
-diff --git a/diff.patch b/diff.patch
-new file mode 100644
-index 0000000..e69de29
 diff --git a/src/cpu/o3/iew.cc b/src/cpu/o3/iew.cc
-index 21b488a..4fd9919 100644
+index 21b488a..90868b7 100644
 --- a/src/cpu/o3/iew.cc
 +++ b/src/cpu/o3/iew.cc
 @@ -143,6 +143,22 @@ IEW::regProbePoints()
@@ -40,6 +33,39 @@ index 21b488a..4fd9919 100644
  {
      instsToCommit
          .init(cpu->numThreads)
+@@ -1545,6 +1562,32 @@ IEW::updateExeInstStats(const DynInstPtr& inst)
+     //
+     if (inst->isControl()) {
+         cpu->executeStats[tid]->numBranches++;
++	
++		Addr target_address = inst->branchTarget(tc);
++        Addr inst_address = inst -> pcState();
++			
++		if(inst->mispredicted()){
++			if(inst->readPredTaken()){
++				if(target_address > inst_address){mispredicted_forwards_taken++;}				
++				else{mispredicted_backwards_taken++;}
++			}else{
++				if(target_address > inst_address){mispredicted_forwards_not_taken++;}
++				else{mispredicted_backwards_not_taken++;}
++			}
++		}
++
++		if(inst->readPredTaken()){
++        	if(target_address > inst_address){total_forwards_taken++;}
++            else{total_backwards_taken++;}
++        }else{
++        	if(target_address > inst_address){total_forwards_not_taken++;}
++            else{total_backwards_not_taken++;}
++    	}
++
++
++
++
++
+     }
+ 
+     //
 diff --git a/src/cpu/o3/iew.hh b/src/cpu/o3/iew.hh
 index 1307e0c..e9f5aeb 100644
 --- a/src/cpu/o3/iew.hh
