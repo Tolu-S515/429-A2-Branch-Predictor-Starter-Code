@@ -1,5 +1,5 @@
 diff --git a/src/cpu/o3/iew.cc b/src/cpu/o3/iew.cc
-index 21b488a..46c3656 100644
+index 21b488a..79151c5 100644
 --- a/src/cpu/o3/iew.cc
 +++ b/src/cpu/o3/iew.cc
 @@ -143,6 +143,22 @@ IEW::regProbePoints()
@@ -33,13 +33,13 @@ index 21b488a..46c3656 100644
  {
      instsToCommit
          .init(cpu->numThreads)
-@@ -1543,8 +1560,49 @@ IEW::updateExeInstStats(const DynInstPtr& inst)
-     //
-     //  Control operations
-     //
--    if (inst->isControl()) {
-+    if (inst->isDirectCtrl()) {
+@@ -1546,6 +1563,51 @@ IEW::updateExeInstStats(const DynInstPtr& inst)
+     if (inst->isControl()) {
          cpu->executeStats[tid]->numBranches++;
+     }
++ 
++    // stats for section 1
++    if (inst->isDirectCtrl()) {
 +
 +        Addr inst_address = inst->pcState().instAddr();
 +		Addr target_address = inst->branchTarget()->instAddr();
@@ -81,9 +81,10 @@ index 21b488a..46c3656 100644
 +            }
 +        }
 +
-     }
++    }
  
      //
+     //  Memory operations
 diff --git a/src/cpu/o3/iew.hh b/src/cpu/o3/iew.hh
 index 1307e0c..8dcc76a 100644
 --- a/src/cpu/o3/iew.hh
