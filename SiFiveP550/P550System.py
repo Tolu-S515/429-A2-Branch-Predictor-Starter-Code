@@ -41,40 +41,46 @@ multisim.set_num_processes(4)
 def terminate_print():
     return True
 
-# We use the P550 processor with one core.
-#  see the P550Processor.py file
-processor_list = [P550Processor(num_cores=1)]#, YourProcessorHere(num_cores=1)]
+resources = ["riscv-spec-lbm-run-se", "riscv-spec-mcf-run-se"]
 
-for processor in processor_list:
-    # We use the P550 Cache system
-    #  see P550Caches.py
-    cache_hierarchy = P550CacheHierarchy()
+for resource in resources:
+    # We use the P550 processor with one core.
+    #  see the P550Processor.py file
+    processor_list = [("LocalBP",  P550Processor(num_cores=1, predictor=LocalBP())), 
+                      ("BiModeBP", P550Processor(num_cores=1, predictor=BiModeBP()))
+                      ]#, YourProcessorHere(num_cores=1)]
+    for i, processor in enumerate(processor_list):
+        proc_name = processor_list[i][0]
+        proc = processor_list[i][1]
+        # We use the P550 Cache system
+        #  see P550Caches.py
+        cache_hierarchy = P550CacheHierarchy()
 
-    # We use a single channel DDR3_1600 memory system
-    memory = SingleChannelDDR3_1600(size="8GiB")
+        # We use a single channel DDR3_1600 memory system
+        memory = SingleChannelDDR3_1600(size="8GiB")
 
-    # The gem5 library simble board which can be used to run simple SE-mode
-    # simulations.
-    board = SimpleBoard(
-        clk_freq="3GHz",
-        processor=processor,
-        memory=memory,
-        cache_hierarchy=cache_hierarchy,
-    )
-    board.set_workload(obtain_resource("riscv-spec-mcf-run-se", clients=["resources"]))
+        # The gem5 library simble board which can be used to run simple SE-mode
+        # simulations.
+        board = SimpleBoard(
+            clk_freq="3GHz",
+            processor=proc,
+            memory=memory,
+            cache_hierarchy=cache_hierarchy,
+        )
+        board.set_workload(obtain_resource(resource, clients=["resources"]))
 
 
-    simulation = Simulator(
-        board=board,
-        on_exit_event={
-            ExitEvent.MAX_INSTS : [terminate_print],
-        },
-        id=f"process_{processor.__str__()}"
-    )
-    simulation.schedule_max_insts(10**7)
-    # Set the board workload to our workload
-    # Set up the simulator
-    multisim.add_simulator(
-        simulation
-    )
+        simulation = Simulator(
+            board=board,
+            on_exit_event={
+                ExitEvent.MAX_INSTS : [terminate_print],
+            },
+            id=f"process_{proc_name}_res_{resource}"
+        )
+        simulation.schedule_max_insts(10**8)
+        # Set the board workload to our workload
+        # Set up the simulator
+        multisim.add_simulator(
+            simulation
+        )
 
