@@ -46,8 +46,9 @@ resources = ["riscv-spec-lbm-run-se", "riscv-spec-mcf-run-se"]
 for resource in resources:
     # We use the P550 processor with one core.
     #  see the P550Processor.py file
-    processor_list = [("LocalBP",  P550Processor(num_cores=1, predictor=LocalBP())), 
-                      ("BiModeBP", P550Processor(num_cores=1, predictor=BiModeBP()))
+    processor_list = [("LocalBP",   P550Processor(num_cores=1, predictor=LocalBP()  )), 
+                      ("BiModeBP",  P550Processor(num_cores=1, predictor=BiModeBP() )),
+                      ("TAGE",      P550Processor(num_cores=1, predictor=TAGE()     ))
                       ]#, YourProcessorHere(num_cores=1)]
     for i, processor in enumerate(processor_list):
         proc_name = processor_list[i][0]
