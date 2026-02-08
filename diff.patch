@@ -1,5 +1,5 @@
 diff --git a/src/cpu/o3/iew.cc b/src/cpu/o3/iew.cc
-index 21b488a..79151c5 100644
+index 21b488a..bd6bfb0 100644
 --- a/src/cpu/o3/iew.cc
 +++ b/src/cpu/o3/iew.cc
 @@ -143,6 +143,22 @@ IEW::regProbePoints()
@@ -33,37 +33,35 @@ index 21b488a..79151c5 100644
  {
      instsToCommit
          .init(cpu->numThreads)
-@@ -1546,6 +1563,51 @@ IEW::updateExeInstStats(const DynInstPtr& inst)
-     if (inst->isControl()) {
-         cpu->executeStats[tid]->numBranches++;
-     }
-+ 
-+    // stats for section 1
+@@ -1543,8 +1560,70 @@ IEW::updateExeInstStats(const DynInstPtr& inst)
+     //
+     //  Control operations
+     //
+-    if (inst->isControl()) {
 +    if (inst->isDirectCtrl()) {
+         cpu->executeStats[tid]->numBranches++;
 +
 +        Addr inst_address = inst->pcState().instAddr();
-+		Addr target_address = inst->branchTarget()->instAddr();
-+
-+        if (inst->mispredicted()){
-+            if (inst->readPredTaken()) {
++	    Addr target_address = inst->branchTarget()->instAddr();
++        
++       if (inst->readPredTaken()) // branch was predicted taken
++        {
++            // if didn't mispredict, then branch is taken
++            if (inst->mispredicted())
++            {
++                // incriment mispredicted
 +                if (target_address > inst_address) {
 +                    iewStats.mispredicted_forwards_taken++;
++                    iewStats.total_forwards_not_taken++;
 +                }
 +                else {
 +                    iewStats.mispredicted_backwards_taken++;
++                    iewStats.total_backwards_not_taken++;
 +                }
 +            }
-+            else {
-+                if (target_address > inst_address) {
-+                    iewStats.mispredicted_forwards_not_taken++;
-+                }
-+                else {
-+                    iewStats.mispredicted_backwards_not_taken++;
-+                }
-+            }
-+        }
-+        else {
-+            if (inst->readPredTaken()) {
++            else
++        {
++                // incriment total taken
 +                if (target_address > inst_address) {
 +                    iewStats.total_forwards_taken++;
 +                }
@@ -71,7 +69,23 @@ index 21b488a..79151c5 100644
 +                    iewStats.total_backwards_taken++;
 +                }
 +            }
-+            else {
++        }
++        else // branch was predicted not taken
++            {
++            // if mispredict, then branch is taken
++            if (inst->mispredicted())
++            {
++                if (target_address > inst_address) {
++                    iewStats.mispredicted_forwards_not_taken++;
++                    iewStats.total_forwards_taken++;
++                }
++                else {
++                    iewStats.mispredicted_backwards_not_taken++;
++                    iewStats.total_backwards_taken++;
++                }
++            }
++            else
++        {
 +                if (target_address > inst_address) {
 +                    iewStats.total_forwards_not_taken++;
 +                }
@@ -81,10 +95,16 @@ index 21b488a..79151c5 100644
 +            }
 +        }
 +
-+    }
++
++
++
++
++
++       
++      
+     }
  
      //
-     //  Memory operations
 diff --git a/src/cpu/o3/iew.hh b/src/cpu/o3/iew.hh
 index 1307e0c..8dcc76a 100644
 --- a/src/cpu/o3/iew.hh
