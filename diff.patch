@@ -160,10 +160,10 @@ index 6c03dd8..31ce1b6 100644
  Source('ras.cc')
 diff --git a/src/cpu/pred/gshare.cc b/src/cpu/pred/gshare.cc
 new file mode 100644
-index 0000000..9291237
+index 0000000..5c159f5
 --- /dev/null
 +++ b/src/cpu/pred/gshare.cc
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,71 @@
 +#include "cpu/pred/gshare.hh"
 +
 +#include "base/intmath.hh"
@@ -179,9 +179,22 @@ index 0000000..9291237
 +
 +GShareBP::GShareBP(const GShareBPParams &params)
 +    : BPredUnit(params),
-+      localPredictorSize(params.localPredictorSize)
++      localPredictorSize(params.localPredictorSize),
++      localCtrBits(params.localCtrBits),
++      localPredictorSets(localPredictorSize / localCtrBits),
++      localCtrs(localPredictorSets, SatCounter8(localCtrBits)),
++      globalHistorySize(params.globalHistorySize),
++      globalHistoryReg(params.numThreads, 0), // maybe get rid of numThreads
++      // I don't think the following is needed because we already parameterise it
++      // globalHistoryBits(ceilLog2(params.globalPredictorSize)),
 +{
++    if (!isPowerOf2(localPredictorSize)) {
++        fatal("Invalid local predictor size!\n");
++    }
 +
++    if (!isPowerOf2(localPredictorSets)) {
++        fatal("Invalid number of local predictor sets! Check localCtrBits.\n");
++    }
 +}
 +
 +void
@@ -212,6 +225,14 @@ index 0000000..9291237
 +{
 +    return false;
 +}
++
++inline
++unsigned
++GShareBP::getLocalIndex(Addr &branch_addr)
++{
++    return (branch_addr >> instShiftAmt) & indexMask;
++}
++
 +} // namespace branch_prediction
 +} // namespace gem5
 diff --git a/src/cpu/pred/gshare.hh b/src/cpu/pred/gshare.hh
