@@ -48,7 +48,8 @@ for resource in resources:
     #  see the P550Processor.py file
     processor_list = [("LocalBP",   P550Processor(num_cores=1, predictor=LocalBP()  )), 
                       ("BiModeBP",  P550Processor(num_cores=1, predictor=BiModeBP() )),
-                      ("TAGE",      P550Processor(num_cores=1, predictor=TAGE()     ))
+                      ("TAGE",      P550Processor(num_cores=1, predictor=TAGE()     )),
+                      ("GShareBP",  P550Processor(num_cores=1, predictor=GShareBP() )),
                       ]#, YourProcessorHere(num_cores=1)]
     for i, processor in enumerate(processor_list):
         proc_name = processor_list[i][0]
@@ -76,7 +77,7 @@ for resource in resources:
             on_exit_event={
                 ExitEvent.MAX_INSTS : [terminate_print],
             },
-            id=f"process_{proc_name}_res_{resource}"
+            id=f"res_{resource}_process_{proc_name}"
         )
         simulation.schedule_max_insts(10**8)
         # Set the board workload to our workload
