@@ -117,7 +117,7 @@ index 1307e0c..8dcc76a 100644
          statistics::Scalar idleCycles;
          /** Stat for total number of squashing cycles. */
 diff --git a/src/cpu/pred/BranchPredictor.py b/src/cpu/pred/BranchPredictor.py
-index 47b9852..4ffbf66 100644
+index 47b9852..88f132b 100644
 --- a/src/cpu/pred/BranchPredictor.py
 +++ b/src/cpu/pred/BranchPredictor.py
 @@ -228,6 +228,19 @@ class BranchPredictor(SimObject):
@@ -133,8 +133,8 @@ index 47b9852..4ffbf66 100644
 +    localPredictorSize = Param.Unsigned(2048, "Size of local predictor")
 +    # localCtrBits is the number of saturating counter bits
 +    localCtrBits = Param.Unsigned(2, "Bits per counter")
-+    # globalHistorySize is clobal history length
-+    globalHistorySize = Param.Unsigned(2, "gobal history length")
++    # globalHistorySize is global history length
++    globalHistorySize = Param.Unsigned(2, "global history length")
 +
 +
  class LocalBP(BranchPredictor):
@@ -160,10 +160,10 @@ index 6c03dd8..31ce1b6 100644
  Source('ras.cc')
 diff --git a/src/cpu/pred/gshare.cc b/src/cpu/pred/gshare.cc
 new file mode 100644
-index 0000000..5c159f5
+index 0000000..0f18ccb
 --- /dev/null
 +++ b/src/cpu/pred/gshare.cc
-@@ -0,0 +1,71 @@
+@@ -0,0 +1,128 @@
 +#include "cpu/pred/gshare.hh"
 +
 +#include "base/intmath.hh"
@@ -182,65 +182,122 @@ index 0000000..5c159f5
 +      localPredictorSize(params.localPredictorSize),
 +      localCtrBits(params.localCtrBits),
 +      localPredictorSets(localPredictorSize / localCtrBits),
++      phtBitCount(log2(localPredictorSets)),
 +      localCtrs(localPredictorSets, SatCounter8(localCtrBits)),
-+      globalHistorySize(params.globalHistorySize),
++      // this will absolutely under utilize the PHT with default values but thats ok
++      globalHistorySize(params.globalHistorySize), // in number of bits
 +      globalHistoryReg(params.numThreads, 0), // maybe get rid of numThreads
-+      // I don't think the following is needed because we already parameterise it
-+      // globalHistoryBits(ceilLog2(params.globalPredictorSize)),
++      globalHistMask(mask(globalHistorySize))
 +{
 +    if (!isPowerOf2(localPredictorSize)) {
 +        fatal("Invalid local predictor size!\n");
 +    }
-+
 +    if (!isPowerOf2(localPredictorSets)) {
 +        fatal("Invalid number of local predictor sets! Check localCtrBits.\n");
 +    }
++    if (localCtrBits(params.localCtrBits) > 8) {
++        fatal("Too much counter bits for SatCounter8\n");
++    }
 +}
 +
++/*
++* updates the path and global history. all branches call this function
++*/
 +void
-+GShareBP::void updateHistories(ThreadID tid, Addr pc, bool uncond,
++GShareBP::updateHistories(ThreadID tid, Addr pc, bool uncond,
 +                           bool taken, Addr target,
 +                           const StaticInstPtr &inst, void * &bp_history)
 +{
-+// Place holder for a function that is called to update predictor history
++    if (uncond) {
++        BPHistory *history = new BPHistory;
++        history->globalHistoryReg = globalHistoryReg[tid];
++        bp_history = static_cast<void*>(history);
++    }
++    if (taken) {
++        globalHistoryReg[tid] = ((globalHistoryReg[tid] << 1) | 1) & globalHistMask;
++    } else {
++        globalHistoryReg[tid] = (globalHistoryReg[tid] << 1) & globalHistMask;
++    }
 +}
 +
-+
++/*
++* looks up the given address in the branch predictore and returns true / false.
++* creates a BPHistroy object to store any state it will need on squash/update
++*/
 +bool
 +GShareBP::lookup(ThreadID tid, Addr branch_addr, void * &bp_history)
 +{
-+    return false;
++    // returns the branch address part of the xor
++    // globaHistorySize is how many bits. k from the questions
++    // phtBitCount is n from te question
++    BPHistory *history = new BPHistory;
++    history->globalHistoryReg = globalHistoryReg[tid];
++    bp_history = static_cast<void*>(history);
++    // addr = (b >> (n - k)) & ((1 << k) - 1) where (1 << k) -1 = mask(k bits)
++    unsigned addr = (branch_addr >> (phtBitCount - globalHistorySize)) & globalHistMask;
++    unsigned hist = globalHistoryReg[tid] & globalHistMask;
++    unsigned idx = hist ^ addr;
++    uint8_t counter_val = localCtrs[idx];
++
++    bool taken = getPrediction(counter_val);
++
++    return taken;
 +}
 +
++/*
++* updates the branch predictor with the actual result of a branch
++*/
 +void
 +GShareBP::update(ThreadID tid, Addr branch_addr, bool taken, void *&bp_history,
 +                bool squashed, const StaticInstPtr & inst, Addr target)
 +{
-+
++    // other branch predictors check this with an assert
++    if (!bp_history) {
++        return;
++    }
++    BPHistory *history = static_cast<BPHistory*>(bp_history);
++    // if this instruction is a misprediction
++    if (squashed) {
++        // if misprediction, restore the value from what we saved
++        if (taken) {
++            globalHistoryReg[tid] = ((bp_history->globalHistoryReg << 1) | 1) & globalHistMask;
++        } else {
++            globalHistoryReg[tid] = (bp_history->globalHistoryReg << 1) & globalHistMask;
++        }
++        return;
++    }
++    // not a mispredict then update counters and delete this version of history
++    unsigned addr = (branch_addr >> (phtBitCount - globalHistorySize)) & globalHistMask;
++    unsigned hist = history->globalHistoryReg & globalHistMask;
++    unsigned idx = hist ^ addr;
++    if (taken) {
++        localCtrs[idx]++;
++    } else {
++        localCtrs[idx]--;
++    }
++    delete history;
++    bp_history = nullptr;
 +}
 +
++
++/*
++* returns the taken / not taken prediction given the value of the counter
++*/
 +inline
 +bool
 +GShareBP::getPrediction(uint8_t &count)
 +{
-+    return false;
-+}
-+
-+inline
-+unsigned
-+GShareBP::getLocalIndex(Addr &branch_addr)
-+{
-+    return (branch_addr >> instShiftAmt) & indexMask;
++    return (count >> (localCtrBits - 1));
 +}
 +
 +} // namespace branch_prediction
 +} // namespace gem5
 diff --git a/src/cpu/pred/gshare.hh b/src/cpu/pred/gshare.hh
 new file mode 100644
-index 0000000..61e1a74
+index 0000000..e67c8d4
 --- /dev/null
 +++ b/src/cpu/pred/gshare.hh
-@@ -0,0 +1,94 @@
+@@ -0,0 +1,118 @@
 +#ifndef __CPU_PRED_GSHARE_PRED_HH__
 +#define __CPU_PRED_GSHARE_PRED_HH__
 +
@@ -266,6 +323,11 @@ index 0000000..61e1a74
 +class GShareBP : public BPredUnit
 +{
 +  public:
++    struct BPHistory
++    {
++        unsigned globalHistoryReg;
++    };
++
 +    /**
 +     * Default branch predictor constructor.
 +     */
@@ -319,7 +381,18 @@ index 0000000..61e1a74
 +     * previous global branch history in it.
 +     */
 +    void squash(ThreadID tid, void * &bp_history) override
-+    { assert(bp_history == NULL); }
++    {
++        if (!bp_history)
++            return;
++
++        BPHistory *history = static_cast<BPHistory*>(bp_history);
++
++        // restore the global history to what it was before this branch
++        globalHistoryReg[tid] = history->globalHistoryReg;
++
++        delete history;
++        bp_history = nullptr;
++    }
 +
 +  private:
 +    /**
@@ -329,6 +402,14 @@ index 0000000..61e1a74
 +     *  @return The prediction based on the counter value.
 +     */
 +    inline bool getPrediction(uint8_t &count);
++    const unsigned localPredictorSize;
++    const unsigned localCtrBits;
++    const unsigned localPredictorSets;
++    const unsigned phtBitCount;
++    std::vector<SatCounter8> localCtrs;
++    const unsigned globalHistorySize;
++    std::vector<unsigned> globalHistoryReg;
++    const unsigned globalHistMask;
 +};
 +
 +} // namespace branch_prediction
