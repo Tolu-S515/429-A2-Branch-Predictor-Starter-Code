@@ -160,10 +160,10 @@ index 6c03dd8..31ce1b6 100644
  Source('ras.cc')
 diff --git a/src/cpu/pred/gshare.cc b/src/cpu/pred/gshare.cc
 new file mode 100644
-index 0000000..fc1fe19
+index 0000000..7350419
 --- /dev/null
 +++ b/src/cpu/pred/gshare.cc
-@@ -0,0 +1,113 @@
+@@ -0,0 +1,126 @@
 +#include "cpu/pred/gshare.hh"
 +
 +#include "base/intmath.hh"
@@ -207,8 +207,14 @@ index 0000000..fc1fe19
 +{
 +    assert(uncond || bp_history);
 +    if (uncond) {
-+        // taken
++        BPHistory *history = new BPHistory;
++        history->globalHistoryReg = globalHistoryReg[tid];
++        bp_history = static_cast<void*>(history);
++    }
++    if (taken) {
 +        globalHistoryReg[tid] = ((globalHistoryReg[tid] << 1) | 1) & globalHistMask;
++    } else {
++        globalHistoryReg[tid] = (globalHistoryReg[tid] << 1) & globalHistMask;
 +    }
 +}
 +
@@ -224,13 +230,15 @@ index 0000000..fc1fe19
 +    // phtBitCount is n from te question
 +    BPHistory *history = new BPHistory;
 +    history->globalHistoryReg = globalHistoryReg[tid];
++    bp_history = static_cast<void*>(history);
 +    unsigned addr = (branch_addr >> (phtBitCount - globalHistorySize)) & globalHistMask;
 +    unsigned hist = globalHistoryReg[tid] & globalHistMask;
 +    unsigned idx = hist ^ addr;
 +    uint8_t counter_val = localCtrs[idx];
++
 +    bool taken = getPrediction(counter_val);
-+    globalHistoryReg[tid] = ((globalHistoryReg[tid] << 1) | taken) & globalHistMask;
-+    bp_history = static_cast<void*>(history);
++
++    // globalHistoryReg[tid] = ((globalHistoryReg[tid] << 1) | taken) & globalHistMask;
 +    return taken;
 +}
 +
@@ -248,7 +256,12 @@ index 0000000..fc1fe19
 +    BPHistory *history = static_cast<BPHistory*>(bp_history);
 +
 +    if (squashed) {
-+        globalHistoryReg[tid] = history->globalHistoryReg;
++        if (taken) {
++            globalHistoryReg[tid] = ((globalHistoryReg[tid] << 1) | 1) & globalHistMask;
++        } else {
++            globalHistoryReg[tid] = (globalHistoryReg[tid] << 1) & globalHistMask;
++        }
++        return;
 +    } else {
 +        unsigned addr = (branch_addr >> (phtBitCount - globalHistorySize)) & globalHistMask;
 +        unsigned hist = history->globalHistoryReg & globalHistMask;
